@@ -1,126 +1,81 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="UTF-8">
 <title>チェックリスト</title>
 <style>
-  :root { --accent:#2563eb; --bg:#f8fafc; --card:#ffffff; --border:#e2e8f0; --text:#111827; }
-  body{margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial; background:var(--bg); color:var(--text);}
-  .wrap{max-width:720px; margin:24px auto; padding:16px;}
-  h1{font-size:20px; margin:0 0 12px;}
-  .row{
-    display:flex; gap:8px; align-items:center; background:var(--card);
-    border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:0 2px 8px rgba(0,0,0,.06);
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
   }
-  input[type="text"]{
-    flex:1; padding:12px 12px; font-size:16px; border:1px solid var(--border); border-radius:8px;
-    outline:none;
+  input[type="text"] {
+    width: 200px;
+    padding: 5px;
+    font-size: 16px;
   }
-  input[type="text"]:focus{ border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,.15); }
-  button{
-    appearance:none; border:none; background:var(--accent); color:#fff; padding:12px 16px; font-size:16px;
-    border-radius:10px; cursor:pointer; touch-action:manipulation;
+  button {
+    padding: 5px 10px;
+    margin-left: 5px;
+    font-size: 16px;
+    cursor: pointer;
   }
-  button:active{ transform:translateY(1px); }
-  ul{list-style:none; padding:0; margin:14px 0 0;}
-  li{
-    display:flex; align-items:center; gap:12px; background:var(--card);
-    border:1px solid var(--border); border-radius:12px; padding:12px; margin-top:10px;
+  ul {
+    list-style: none;
+    padding: 0;
   }
-  /* スマホでも押しやすいように大きめ */
-  .check{
-    width:22px; height:22px; accent-color:var(--accent);
-    flex:0 0 auto;
+  li {
+    display: flex;
+    align-items: center;
+    margin: 5px 0;
   }
-  .label{
-    flex:1; font-size:16px; line-height:1.4; word-break:break-word;
-  }
-  .done .label{ text-decoration:line-through; color:#6b7280; }
-  .del{
-    background:#ef4444; padding:8px 10px; border-radius:8px; color:#fff; font-size:14px;
+  li span {
+    flex-grow: 1;
   }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>チェックリスト</h1>
 
-    <form id="addForm" class="row" autocomplete="off">
-      <input id="text" type="text" placeholder="ここに文章を入力" required />
-      <button type="submit" aria-label="項目を追加">追加</button>
-    </form>
+<h2>チェックリスト</h2>
+<input type="text" id="itemInput" placeholder="項目を入力">
+<button onclick="addItem()">追加</button>
+<button onclick="clearAll()">全削除</button>
 
-    <ul id="list" aria-live="polite"></ul>
-  </div>
+<ul id="checklist"></ul>
 
 <script>
-(function(){
-  const form = document.getElementById('addForm');
-  const input = document.getElementById('text');
-  const list  = document.getElementById('list');
-  const STORAGE_KEY = 'checklist-items-v1';
-
-  function save(){
-    const data = [...list.querySelectorAll('li')].map(li => ({
-      text: li.querySelector('.label').textContent,
-      checked: li.querySelector('.check').checked
-    }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }
-
-  function addItem(text, checked=false){
-    const li = document.createElement('li');
-    const id = 'chk-' + Math.random().toString(36).slice(2,8);
-
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'check';
-    cb.id = id;
-    cb.checked = checked;
-
-    const label = document.createElement('label');
-    label.className = 'label';
-    label.setAttribute('for', id);
-    label.textContent = text;
-
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'del';
-    del.textContent = '削除';
-
-    // 状態反映
-    function updateState(){
-      li.classList.toggle('done', cb.checked);
-      save();
-    }
-
-    cb.addEventListener('change', updateState, {passive:true});
-    del.addEventListener('click', () => { li.remove(); save(); });
-
-    li.appendChild(cb);
-    li.appendChild(label);  // ラベルを大きなタッチ領域として利用
-    li.appendChild(del);
-    list.appendChild(li);
-    updateState();
-  }
-
-  // 追加（EnterでもOK）
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
+function addItem() {
+    const input = document.getElementById('itemInput');
     const text = input.value.trim();
-    if(!text) return;
-    addItem(text, false);
-    input.value = '';
-    input.focus();
-  });
+    if (text !== '') {
+        const li = document.createElement('li');
 
-  // 初期ロード（ローカル保存から復元）
-  try{
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    saved.forEach(item => addItem(item.text, item.checked));
-  }catch(e){ /* 何もしない */ }
-})();
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.style.marginRight = '10px';
+        checkbox.addEventListener('touchstart', e => {
+            e.target.checked = !e.target.checked;
+        });
+
+        const label = document.createElement('span');
+        label.textContent = text;
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = '削除';
+        deleteBtn.onclick = () => li.remove();
+
+        li.appendChild(checkbox);
+        li.appendChild(label);
+        li.appendChild(deleteBtn);
+
+        document.getElementById('checklist').appendChild(li);
+        input.value = '';
+    }
+}
+
+function clearAll() {
+    document.getElementById('checklist').innerHTML = '';
+}
 </script>
+
 </body>
 </html>
