@@ -2,22 +2,37 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>チェックリスト</title>
+<title>チェックリスト（保存付き）</title>
 <style>
   body {
     font-family: Arial, sans-serif;
     padding: 20px;
+    font-size: 18px;
   }
   input[type="text"] {
     width: 200px;
     padding: 5px;
-    font-size: 16px;
+    font-size: 18px;
   }
   button {
     padding: 5px 10px;
     margin-left: 5px;
-    font-size: 16px;
+    font-size: 18px;
     cursor: pointer;
+    border: none;
+    border-radius: 4px;
+  }
+  #addBtn {
+    background-color: #2196F3;
+    color: white;
+  }
+  .deleteBtn {
+    background-color: #f44336;
+    color: white;
+  }
+  #clearBtn {
+    background-color: #f44336;
+    color: white;
   }
   ul {
     list-style: none;
@@ -30,6 +45,7 @@
   }
   li span {
     flex-grow: 1;
+    margin-left: 8px;
   }
 </style>
 </head>
@@ -37,43 +53,74 @@
 
 <h2>チェックリスト</h2>
 <input type="text" id="itemInput" placeholder="項目を入力">
-<button onclick="addItem()">追加</button>
-<button onclick="clearAll()">全削除</button>
+<button id="addBtn" onclick="addItem()">追加</button>
+<button id="clearBtn" onclick="clearAll()">全削除</button>
 
 <ul id="checklist"></ul>
 
 <script>
-function addItem() {
-    const input = document.getElementById('itemInput');
-    const text = input.value.trim();
-    if (text !== '') {
+let items = [];
+
+window.onload = function() {
+    const saved = localStorage.getItem('checklist');
+    if (saved) {
+        items = JSON.parse(saved);
+        renderList();
+    }
+};
+
+function saveList() {
+    localStorage.setItem('checklist', JSON.stringify(items));
+}
+
+function renderList() {
+    const list = document.getElementById('checklist');
+    list.innerHTML = '';
+    items.forEach((item, index) => {
         const li = document.createElement('li');
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
-        checkbox.style.marginRight = '10px';
-        checkbox.addEventListener('touchstart', e => {
-            e.target.checked = !e.target.checked;
+        checkbox.checked = item.checked;
+        checkbox.addEventListener('change', () => {
+            items[index].checked = checkbox.checked;
+            saveList();
         });
 
         const label = document.createElement('span');
-        label.textContent = text;
+        label.textContent = item.text;
 
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = '削除';
-        deleteBtn.onclick = () => li.remove();
+        deleteBtn.className = 'deleteBtn';
+        deleteBtn.onclick = () => {
+            items.splice(index, 1);
+            saveList();
+            renderList();
+        };
 
         li.appendChild(checkbox);
         li.appendChild(label);
         li.appendChild(deleteBtn);
+        list.appendChild(li);
+    });
+}
 
-        document.getElementById('checklist').appendChild(li);
+function addItem() {
+    const input = document.getElementById('itemInput');
+    const text = input.value.trim();
+    if (text !== '') {
+        items.push({ text: text, checked: false });
+        saveList();
+        renderList();
         input.value = '';
     }
 }
 
 function clearAll() {
-    document.getElementById('checklist').innerHTML = '';
+    items = [];
+    saveList();
+    renderList();
 }
 </script>
 
