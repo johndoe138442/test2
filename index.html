@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スペースインベーダー</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+        }
+        
+        h1 {
+            margin: 10px 0;
+            font-size: 24px;
+            text-shadow: 0 0 10px #0f0;
+        }
+        
+        .game-info {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        #gameCanvas {
+            border: 2px solid #0f0;
+            box-shadow: 0 0 20px #0f0;
+        }
+        
+        .controls {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .game-over {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0f0;
+            padding: 30px;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .game-over h2 {
+            color: #f00;
+            font-size: 32px;
+            margin: 0 0 20px 0;
+            text-shadow: 0 0 10px #f00;
+        }
+        
+        .game-over button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px;
+        }
+        
+        .game-over button:hover {
+            background: #0d0;
+            box-shadow: 0 0 10px #0f0;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        .blink {
+            animation: blink 0.3s infinite;
+        }
+    </style>
+</head>
+<body>
+    <h1>SPACE INVADERS</h1>
+    <div class="game-info">
+        <div>SCORE: <span id="score">0</span></div>
+        <div>LEVEL: <span id="level">1</span></div>
+        <div>LIVES: <span id="lives">3</span></div>
+    </div>
+    
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div class="controls">
+        <p>← → : 移動 | SPACE : 発射 | ENTER : ゲーム開始/再開</p>
+    </div>
+    
+    <div id="gameOverModal" class="game-over">
+        <h2 id="gameOverText">GAME OVER</h2>
+        <p>最終スコア: <span id="finalScore">0</span></p>
+        <button onclick="startGame()">もう一度プレイ</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // ゲーム状態
+        let gameState = {
+            running: false,
+            paused: false,
+            score: 0,
+            level: 1,
+            lives: 3
+        };
+        
+        // プレイヤー
+        let player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 50,
+            width: 50,
+            height: 30,
+            speed: 5,
+            canShoot: true,
+            shootCooldown: 0
+        };
+        
+        // 弾丸
+        let bullets = [];
+        let enemyBullets = [];
+        
+        // インベーダー
+        let invaders = [];
+        let invaderDirection = 1;
+        let invaderSpeed = 1;
+        let invaderDropDistance = 30;
+        
+        // パーティクル効果
+        let particles = [];
+        
+        // キー入力
+        const keys = {};
+        
+        // サウンド効果（ビープ音）
+        function playBeep(frequency, duration) {
+            // Web Audio APIは使用せず、視覚効果のみ
+        }
+        
+        // パーティクル生成
+        function createExplosion(x, y, color = '#ff0') {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 30,
+                    maxLife: 30,
+                    color: color
+                });
+            }
+        }
+        
+        // インベーダー初期化
+        function initInvaders() {
+            invaders = [];
+            const rows = 5;
+            const cols = 10;
+            const spacing = 60;
+            const startX = 100;
+            const startY = 80;
+            
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    invaders.push({
+                        x: startX + col * spacing,
+                        y: startY + row * 40,
+                        width: 40,
+                        height: 30,
+                        type: row < 2 ? 3 : row < 4 ? 2 : 1, // 上の方が高得点
+                        alive: true,
+                        shootChance: 0.001 * gameState.level
+                    });
+                }
+            }
+        }
+        
+        // プレイヤー描画
+        function drawPlayer() {
+            ctx.fillStyle = player.canShoot ? '#0f0' : '#f80';
+            
+            // 戦車のような形状
+            ctx.fillRect(player.x + 15, player.y, 20, 20);
+            ctx.fillRect(player.x + 20, player.y - 10, 10, 10);
+            ctx.fillRect(player.x, player.y + 20, 50, 10);
+        }
+        
+        // インベーダー描画
+        function drawInvader(invader) {
+            if (!invader.alive) return;
+            
+            const colors = ['#0f0', '#ff0', '#f0f'];
+            ctx.fillStyle = colors[invader.type - 1];
+            
+            // シンプルなインベーダー形状
+            ctx.fillRect(invader.x, invader.y, invader.width, invader.height);
+            ctx.fillRect(invader.x + 5, invader.y - 5, 10, 5);
+            ctx.fillRect(invader.x + 25, invader.y - 5, 10, 5);
+        }
+        
+        // 弾丸描画
+        function drawBullet(bullet, color = '#0f0') {
+            ctx.fillStyle = color;
+            ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+        }
+        
+        // パーティクル描画
+        function drawParticles() {
+            particles.forEach((particle, index) => {
+                ctx.fillStyle = particle.color;
+                ctx.globalAlpha = particle.life / particle.maxLife;
+                ctx.fillRect(particle.x, particle.y, 3, 3);
+                ctx.globalAlpha = 1;
+                
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life--;
+                
+                if (particle.life <= 0) {
+                    particles.splice(index, 1);
+                }
+            });
+        }
+        
+        // 衝突判定
+        function collision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+        
+        // プレイヤー射撃
+        function playerShoot() {
+            if (player.canShoot && player.shootCooldown <= 0) {
+                bullets.push({
+                    x: player.x + 22,
+                    y: player.y - 10,
+                    width: 6,
+                    height: 15,
+                    speed: 8
+                });
+                player.shootCooldown = 15;
+                player.canShoot = false;
+                setTimeout(() => { player.canShoot = true; }, 300);
+            }
+        }
+        
+        // インベーダー射撃
+        function invaderShoot() {
+            invaders.forEach(invader => {
+                if (invader.alive && Math.random() < invader.shootChance) {
+                    enemyBullets.push({
+                        x: invader.x + invader.width / 2,
+                        y: invader.y + invader.height,
+                        width: 4,
+                        height: 10,
+                        speed: 3
+                    });
+                }
+            });
+        }
+        
+        // ゲーム更新
+        function update() {
+            if (!gameState.running) return;
+            
+            // プレイヤー移動
+            if (keys['ArrowLeft'] && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+            if (keys[' ']) {
+                playerShoot();
+            }
+            
+            if (player.shootCooldown > 0) {
+                player.shootCooldown--;
+            }
+            
+            // 弾丸更新
+            bullets = bullets.filter(bullet => {
+                bullet.y -= bullet.speed;
+                return bullet.y > -bullet.height;
+            });
+            
+            enemyBullets = enemyBullets.filter(bullet => {
+                bullet.y += bullet.speed;
+                return bullet.y < canvas.height;
+            });
+            
+            // インベーダー移動
+            let moveDown = false;
+            for (let invader of invaders) {
+                if (invader.alive) {
+                    if ((invader.x <= 0 && invaderDirection < 0) || 
+                        (invader.x >= canvas.width - invader.width && invaderDirection > 0)) {
+                        moveDown = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (moveDown) {
+                invaderDirection *= -1;
+                invaders.forEach(invader => {
+                    invader.y += invaderDropDistance;
+                });
+                invaderSpeed += 0.2;
+            }
+            
+            invaders.forEach(invader => {
+                if (invader.alive) {
+                    invader.x += invaderDirection * invaderSpeed;
+                }
+            });
+            
+            // インベーダー射撃
+            invaderShoot();
+            
+            // 衝突判定 - プレイヤー弾 vs インベーダー
+            bullets.forEach((bullet, bulletIndex) => {
+                invaders.forEach((invader, invaderIndex) => {
+                    if (invader.alive && collision(bullet, invader)) {
+                        invader.alive = false;
+                        bullets.splice(bulletIndex, 1);
+                        createExplosion(invader.x + invader.width/2, invader.y + invader.height/2, '#ff0');
+                        
+                        // スコア加算
+                        gameState.score += invader.type * 10;
+                        updateUI();
+                    }
+                });
+            });
+            
+            // 衝突判定 - 敵弾 vs プレイヤー
+            enemyBullets.forEach((bullet, index) => {
+                if (collision(bullet, player)) {
+                    enemyBullets.splice(index, 1);
+                    createExplosion(player.x + player.width/2, player.y + player.height/2, '#f00');
+                    gameState.lives--;
+                    updateUI();
+                    
+                    if (gameState.lives <= 0) {
+                        gameOver();
+                    } else {
+                        // 短時間無敵状態
+                        player.canShoot = false;
+                        setTimeout(() => { player.canShoot = true; }, 1000);
+                    }
+                }
+            });
+            
+            // レベルクリアチェック
+            const aliveInvaders = invaders.filter(inv => inv.alive);
+            if (aliveInvaders.length === 0) {
+                nextLevel();
+            }
+            
+            // ゲームオーバーチェック（インベーダーが下に到達）
+            for (let invader of invaders) {
+                if (invader.alive && invader.y + invader.height >= player.y) {
+                    gameOver();
+                    break;
+                }
+            }
+        }
+        
+        // 描画
+        function draw() {
+            // 背景クリア
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 星空効果
+            ctx.fillStyle = '#fff';
+            for (let i = 0; i < 50; i++) {
+                const x = (i * 37) % canvas.width;
+                const y = (i * 23 + Date.now() * 0.1) % canvas.height;
+                ctx.fillRect(x, y, 1, 1);
+            }
+            
+            if (!gameState.running) {
+                ctx.fillStyle = '#0f0';
+                ctx.font = '36px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('PRESS ENTER TO START', canvas.width/2, canvas.height/2);
+                return;
+            }
+            
+            // ゲーム要素描画
+            drawPlayer();
+            
+            invaders.forEach(drawInvader);
+            
+            bullets.forEach(bullet => drawBullet(bullet, '#0f0'));
+            enemyBullets.forEach(bullet => drawBullet(bullet, '#f00'));
+            
+            drawParticles();
+        }
+        
+        // UI更新
+        function updateUI() {
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('level').textContent = gameState.level;
+            document.getElementById('lives').textContent = gameState.lives;
+        }
+        
+        // 次のレベル
+        function nextLevel() {
+            gameState.level++;
+            gameState.score += 100; // ボーナス
+            invaderSpeed = 1 + gameState.level * 0.5;
+            initInvaders();
+            updateUI();
+        }
+        
+        // ゲームオーバー
+        function gameOver() {
+            gameState.running = false;
+            document.getElementById('finalScore').textContent = gameState.score;
+            document.getElementById('gameOverModal').style.display = 'block';
+        }
+        
+        // ゲーム開始
+        function startGame() {
+            gameState.running = true;
+            gameState.score = 0;
+            gameState.level = 1;
+            gameState.lives = 3;
+            
+            player.x = canvas.width / 2 - 25;
+            player.y = canvas.height - 50;
+            player.canShoot = true;
+            player.shootCooldown = 0;
+            
+            bullets = [];
+            enemyBullets = [];
+            particles = [];
+            
+            invaderDirection = 1;
+            invaderSpeed = 1;
+            
+            initInvaders();
+            updateUI();
+            
+            document.getElementById('gameOverModal').style.display = 'none';
+        }
+        
+        // ゲームループ
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // キーボードイベント
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            
+            if (e.key === 'Enter') {
+                if (!gameState.running) {
+                    startGame();
+                }
+            }
+            
+            e.preventDefault();
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        // 初期化
+        updateUI();
+        gameLoop();
+    </script>
+</body>
+</html>
