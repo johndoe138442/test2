@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>チェックリスト（保存付き）</title>
+<title>チェックリスト</title>
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -50,6 +50,11 @@
   li span {
     flex-grow: 1;
     margin-left: 16px;
+    transition: text-decoration 0.2s ease;
+  }
+  li span.checked {
+    text-decoration: line-through;
+    opacity: 0.6;
   }
 </style>
 </head>
@@ -65,16 +70,10 @@
 <script>
 let items = [];
 
-window.onload = function() {
-    const saved = localStorage.getItem('checklist');
-    if (saved) {
-        items = JSON.parse(saved);
-        renderList();
-    }
-};
-
+// localStorage の代わりにメモリ内に保存（Claude.ai環境での制限）
 function saveList() {
-    localStorage.setItem('checklist', JSON.stringify(items));
+    // localStorage.setItem('checklist', JSON.stringify(items));
+    console.log('リストを保存しました:', items);
 }
 
 function renderList() {
@@ -88,11 +87,13 @@ function renderList() {
         checkbox.checked = item.checked;
         checkbox.addEventListener('change', () => {
             items[index].checked = checkbox.checked;
+            label.className = checkbox.checked ? 'checked' : '';
             saveList();
         });
 
         const label = document.createElement('span');
         label.textContent = item.text;
+        label.className = item.checked ? 'checked' : '';
 
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = '削除';
@@ -126,6 +127,13 @@ function clearAll() {
     saveList();
     renderList();
 }
+
+// Enterキーで項目を追加
+document.getElementById('itemInput').addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        addItem();
+    }
+});
 </script>
 
 </body>
