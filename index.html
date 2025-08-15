@@ -15,31 +15,109 @@
             flex-direction: column;
             align-items: center;
             overflow: hidden;
+            touch-action: manipulation;
+            user-select: none;
         }
         
         h1 {
-            margin: 10px 0;
-            font-size: 24px;
+            margin: 5px 0;
+            font-size: clamp(16px, 4vw, 24px);
             text-shadow: 0 0 10px #0f0;
         }
         
         .game-info {
             display: flex;
-            gap: 30px;
-            margin-bottom: 10px;
-            font-size: 18px;
+            gap: 15px;
+            margin-bottom: 5px;
+            font-size: clamp(12px, 3vw, 18px);
+            flex-wrap: wrap;
+            justify-content: center;
         }
         
         #gameCanvas {
             border: 2px solid #0f0;
             box-shadow: 0 0 20px #0f0;
+            max-width: 100vw;
+            max-height: 70vh;
         }
         
         .controls {
-            margin-top: 10px;
+            margin-top: 5px;
             text-align: center;
-            font-size: 14px;
+            font-size: clamp(10px, 2.5vw, 14px);
             opacity: 0.8;
+        }
+        
+        /* タッチコントロール */
+        .touch-controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 120px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            z-index: 100;
+        }
+        
+        .touch-btn {
+            background: rgba(0, 255, 0, 0.2);
+            border: 2px solid #0f0;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            padding: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 80px;
+            min-height: 80px;
+        }
+        
+        .touch-btn:active {
+            background: rgba(0, 255, 0, 0.4);
+            transform: scale(0.95);
+        }
+        
+        .move-controls {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .shoot-btn {
+            background: rgba(255, 0, 0, 0.2);
+            border-color: #f00;
+            color: #f00;
+            font-size: 24px;
+        }
+        
+        .shoot-btn:active {
+            background: rgba(255, 0, 0, 0.4);
+        }
+        
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {
+            .touch-controls {
+                display: flex;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .touch-controls {
+                display: none;
+            }
+        }
+        
+        @media (max-height: 600px) {
+            h1 { margin: 2px 0; }
+            .game-info { margin-bottom: 2px; }
+            .controls { margin-top: 2px; }
         }
         
         .game-over {
@@ -100,7 +178,17 @@
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     
     <div class="controls">
-        <p>← → : 移動 | SPACE : 発射 | ENTER : ゲーム開始/再開</p>
+        <p>PC: ← → 移動 | SPACE 発射 | ENTER 開始</p>
+        <p>スマホ: 下部のボタンで操作</p>
+    </div>
+    
+    <!-- タッチ操作用コントロール -->
+    <div class="touch-controls">
+        <div class="move-controls">
+            <button class="touch-btn" id="leftBtn">◀</button>
+            <button class="touch-btn" id="rightBtn">▶</button>
+        </div>
+        <button class="touch-btn shoot-btn" id="shootBtn">🚀</button>
     </div>
     
     <div id="gameOverModal" class="game-over">
@@ -112,6 +200,28 @@
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        
+        // キャンバスサイズをレスポンシブに調整
+        function resizeCanvas() {
+            const maxWidth = Math.min(window.innerWidth - 20, 800);
+            const maxHeight = Math.min(window.innerHeight * 0.7, 600);
+            const aspectRatio = 800 / 600;
+            
+            let width = maxWidth;
+            let height = width / aspectRatio;
+            
+            if (height > maxHeight) {
+                height = maxHeight;
+                width = height * aspectRatio;
+            }
+            
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+        }
+        
+        // ページ読み込み時とリサイズ時にキャンバスサイズ調整
+        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('resize', resizeCanvas);
         
         // ゲーム状態
         let gameState = {
@@ -146,8 +256,13 @@
         // パーティクル効果
         let particles = [];
         
-        // キー入力
+        // キー入力とタッチ入力
         const keys = {};
+        let touchControls = {
+            left: false,
+            right: false,
+            shoot: false
+        };
         
         // サウンド効果（ビープ音）
         function playBeep(frequency, duration) {
@@ -283,14 +398,14 @@
         function update() {
             if (!gameState.running) return;
             
-            // プレイヤー移動
-            if (keys['ArrowLeft'] && player.x > 0) {
+            // プレイヤー移動（キーボード + タッチ）
+            if ((keys['ArrowLeft'] || touchControls.left) && player.x > 0) {
                 player.x -= player.speed;
             }
-            if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
+            if ((keys['ArrowRight'] || touchControls.right) && player.x < canvas.width - player.width) {
                 player.x += player.speed;
             }
-            if (keys[' ']) {
+            if (keys[' '] || touchControls.shoot) {
                 playerShoot();
             }
             
@@ -490,6 +605,82 @@
         document.addEventListener('keyup', (e) => {
             keys[e.key] = false;
         });
+        
+        // タッチイベント
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+        const shootBtn = document.getElementById('shootBtn');
+        
+        // 左移動ボタン
+        leftBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchControls.left = true;
+        });
+        leftBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchControls.left = false;
+        });
+        leftBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            touchControls.left = true;
+        });
+        leftBtn.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            touchControls.left = false;
+        });
+        
+        // 右移動ボタン
+        rightBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchControls.right = true;
+        });
+        rightBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchControls.right = false;
+        });
+        rightBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            touchControls.right = true;
+        });
+        rightBtn.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            touchControls.right = false;
+        });
+        
+        // 射撃ボタン
+        shootBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            touchControls.shoot = true;
+            if (!gameState.running) {
+                startGame();
+            }
+        });
+        shootBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            touchControls.shoot = false;
+        });
+        shootBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            touchControls.shoot = true;
+            if (!gameState.running) {
+                startGame();
+            }
+        });
+        shootBtn.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            touchControls.shoot = false;
+        });
+        
+        // タッチ操作でのページスクロール防止
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+        
+        document.addEventListener('touchstart', (e) => {
+            if (e.target.tagName === 'CANVAS') {
+                e.preventDefault();
+            }
+        }, { passive: false });
         
         // 初期化
         updateUI();
