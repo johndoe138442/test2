@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -15,8 +16,8 @@
     font-size: 36px;
   }
   input[type="checkbox"] {
-  transform: scale(2.5);
-  margin-right: 10px; /* ラベルとの間隔を調整 */
+    transform: scale(2.5);
+    margin-right: 10px;
   }
   button {
     padding: 10px 20px;
@@ -38,6 +39,8 @@
     background-color: #f44336;
     color: white;
   }
+
+
   ul {
     list-style: none;
     padding: 0;
@@ -59,8 +62,8 @@
 </style>
 </head>
 <body>
-
 <h2>チェックリスト</h2>
+
 <input type="text" id="itemInput" placeholder="項目を入力">
 <button id="addBtn" onclick="addItem()">追加</button>
 <button id="clearBtn" onclick="clearAll()">全削除</button>
@@ -69,11 +72,97 @@
 
 <script>
 let items = [];
+let storageType = 'none';
 
-// localStorage の代わりにメモリ内に保存（Claude.ai環境での制限）
+// ストレージの利用可能性をチェック
+function checkStorageAvailability() {
+    try {
+        // localStorageのテスト
+        localStorage.setItem('test', 'test');
+        localStorage.removeItem('test');
+        storageType = 'localStorage';
+        return true;
+    } catch(e) {
+        try {
+            // sessionStorageのテスト
+            sessionStorage.setItem('test', 'test');
+            sessionStorage.removeItem('test');
+            storageType = 'sessionStorage';
+            return true;
+        } catch(e) {
+            storageType = 'none';
+            return false;
+        }
+    }
+}
+
+// データを保存
 function saveList() {
-    // localStorage.setItem('checklist', JSON.stringify(items));
-    console.log('リストを保存しました:', items);
+    try {
+        if (storageType === 'localStorage') {
+            localStorage.setItem('checklist', JSON.stringify(items));
+        } else if (storageType === 'sessionStorage') {
+            sessionStorage.setItem('checklist', JSON.stringify(items));
+        }
+        console.log('リストを保存しました:', items);
+    } catch(e) {
+        console.log('保存に失敗しました:', e);
+    }
+}
+
+// データを読み込み
+function loadList() {
+    try {
+        let savedData = null;
+        if (storageType === 'localStorage') {
+            savedData = localStorage.getItem('checklist');
+        } else if (storageType === 'sessionStorage') {
+            savedData = sessionStorage.getItem('checklist');
+        }
+        
+        if (savedData) {
+            items = JSON.parse(savedData);
+            renderList();
+        }
+    } catch(e) {
+        console.log('読み込みに失敗しました:', e);
+        items = [];
+    }
+}
+
+// データをJSONファイルとしてエクスポート
+function exportData() {
+    const dataStr = JSON.stringify(items, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = 'checklist_' + new Date().toISOString().slice(0,10) + '.json';
+    link.click();
+}
+
+// JSONファイルからデータをインポート
+function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedItems = JSON.parse(e.target.result);
+            if (Array.isArray(importedItems)) {
+                items = importedItems;
+                saveList();
+                renderList();
+                alert('データをインポートしました！');
+            } else {
+                alert('無効なファイル形式です。');
+            }
+        } catch(error) {
+            alert('ファイルの読み込みに失敗しました。');
+        }
+    };
+    reader.readAsText(file);
 }
 
 function renderList() {
@@ -81,7 +170,7 @@ function renderList() {
     list.innerHTML = '';
     items.forEach((item, index) => {
         const li = document.createElement('li');
-
+        
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.checked = item.checked;
@@ -90,11 +179,11 @@ function renderList() {
             label.className = checkbox.checked ? 'checked' : '';
             saveList();
         });
-
+        
         const label = document.createElement('span');
         label.textContent = item.text;
         label.className = item.checked ? 'checked' : '';
-
+        
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = '削除';
         deleteBtn.className = 'deleteBtn';
@@ -103,7 +192,7 @@ function renderList() {
             saveList();
             renderList();
         };
-
+        
         li.appendChild(checkbox);
         li.appendChild(label);
         li.appendChild(deleteBtn);
@@ -123,10 +212,18 @@ function addItem() {
 }
 
 function clearAll() {
-    items = [];
-    saveList();
-    renderList();
+    if (confirm('全ての項目を削除しますか？')) {
+        items = [];
+        saveList();
+        renderList();
+    }
 }
+
+// 初期化処理
+window.onload = function() {
+    checkStorageAvailability();
+    loadList();
+};
 
 // Enterキーで項目を追加
 document.getElementById('itemInput').addEventListener('keypress', function(event) {
@@ -134,7 +231,11 @@ document.getElementById('itemInput').addEventListener('keypress', function(event
         addItem();
     }
 });
-</script>
 
+// ページを離れる前に保存を確認
+window.addEventListener('beforeunload', function() {
+    saveList();
+});
+</script>
 </body>
 </html>
